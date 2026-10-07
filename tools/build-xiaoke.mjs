@@ -11,6 +11,8 @@
 //
 // 这两份产物**提交进仓库**（这样 link: 安装能直接用，且不要求用户跑构建），
 // 但永远不要手改 —— 手改会在下次构建时被覆盖。要改就改主题文件。
+// 新增功能（动态小克、余额预警换哭脸）不属于换皮，放在 skin/xiaoke-features.mjs，
+// 最后一步对产物逐字替换，每条都必须命中预期次数（第 6 步）。
 //
 // 用法：
 //   node tools/build-xiaoke.mjs            # 生成
@@ -25,6 +27,7 @@ import {
   TEXT_PROPS, FILL_PROPS, COLOR_EXEMPT,
   COPY_REWRITE, COPY_APPEND, LONG_LINE_THRESHOLD, LONG_LINE_SIZE, COPY_FORBIDDEN,
 } from '../skin/xiaoke-theme.mjs'
+import { HOST_PATCHES, WIDGET_PATCHES } from '../skin/xiaoke-features.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SRC_HOST = path.join(ROOT, 'upstream', 'lib', 'index.js')
@@ -287,6 +290,30 @@ function assertActivePool(widget, report) {
   if (missingAppend.length) report.poolMissingAppend = missingAppend
 }
 
+// —— 第 6 步：功能补丁 ——
+// skin/xiaoke-features.mjs 里的新增功能，在其余步骤之后对产物逐字替换。
+// 和 EXACT 不同：每条都必须命中 count 次（默认 1），否则记为失败、构建退出码非 0，
+// 上游改了相关代码时能立刻发现，而不是功能静默失效。
+function applyFeatures(text, patches, label, report) {
+  let out = text
+  for (const patch of patches) {
+    const { why, from, to, count = 1 } = patch
+    const hits = out.split(from).length - 1
+    if (hits !== count) {
+      (report.featureErrors ||= []).push(`${label}：「${why}」应命中 ${count} 次，实际 ${hits} 次`)
+      continue
+    }
+    out = out.split(from).join(to)
+  }
+  report.featuresApplied = (report.featuresApplied || 0) + patches.length
+  return out
+}
+
+// 读源码时把换行统一成 \n：Windows 上 git（core.autocrlf）检出的是 CRLF，而 EXACT 和功能补丁里
+// 跨行的规则都按 \n 写，不统一的话会静默失配（构建照常成功，产物却是上游原样，比如余额变回靛蓝）。
+// 产物也就一律是 \n，和在哪个系统上构建无关
+function normalizeEol(text) { return text.replace(/\r\n/g, '\n') }
+
 function build() {
   const hostSrc = pickSource(SRC_HOST, [
     path.join(ROOT, 'lib', 'index.js'),
@@ -304,13 +331,16 @@ function build() {
     '// 要改配色/命名：改 skin/xiaoke-theme.mjs 后重新构建。\n' +
     '// ' + what + '\n'
 
-  const host = banner('宿主侧插件（小克版）', hostSrc) +
-    recolor(rename(fs.readFileSync(hostSrc, 'utf8')), report)
-  const widget = appendCopy(
-    rewriteCopy(
-      recolor(rename(fs.readFileSync(widgetSrc, 'utf8')), report),
+  const host = banner('宿主侧插件（小克版）', hostSrc) + applyFeatures(
+    recolor(rename(normalizeEol(fs.readFileSync(hostSrc, 'utf8'))), report),
+    HOST_PATCHES, '宿主', report)
+  const widget = applyFeatures(
+    appendCopy(
+      rewriteCopy(
+        recolor(rename(normalizeEol(fs.readFileSync(widgetSrc, 'utf8'))), report),
+        report),
       report),
-    report)
+    WIDGET_PATCHES, '挂件', report)
 
   assertActivePool(widget, report)
   return { host, widget, report, hostSrc, widgetSrc }
@@ -320,7 +350,8 @@ const check = process.argv.includes('--check')
 const { host, widget, report, hostSrc, widgetSrc } = build()
 
 // 幂等性检查：产物必须与上次提交的一致，否则说明改了主题却没重新构建
-const same = (p, next) => fs.existsSync(p) && fs.readFileSync(p, 'utf8') === next
+// 已有的产物也统一换行再比：Windows 上检出成 CRLF 的产物内容没变，不算过期
+const same = (p, next) => fs.existsSync(p) && normalizeEol(fs.readFileSync(p, 'utf8')) === next
 const stale = []
 if (check) {
   if (!same(OUT_HOST, host)) stale.push(path.relative(ROOT, OUT_HOST))
@@ -375,7 +406,13 @@ if (report.poolMissingAppend) {
   console.log('\n✗ 活跃池里缺少追加台词：')
   for (const x of report.poolMissingAppend) console.log('   ' + JSON.stringify(x))
 }
-const hardFail = report.poolError || report.poolLeaked || report.poolMissing || report.poolMissingAppend || report.poolResidual
+if (report.featureErrors) {
+  console.log('\n✗ 功能补丁没对上（上游可能改了相关代码，请更新 skin/xiaoke-features.mjs）：')
+  for (const x of report.featureErrors) console.log('   ' + x)
+} else if (report.featuresApplied) {
+  console.log('✓ 功能补丁 ' + report.featuresApplied + ' 条全部命中')
+}
+const hardFail = report.poolError || report.poolLeaked || report.poolMissing || report.poolMissingAppend || report.poolResidual || report.featureErrors
 // 冷色残留也算硬失败：这套皮肤是暖色系，漏改的冷色在界面上一眼可见
 // （v0.4.0 的 #3a56a8 / #7d8db8 就是这么漏过去的 —— 当时构建完全静默）。
 const colorFail = !!report.coldLeftovers
@@ -384,7 +421,7 @@ if (staleFail) {
   console.error('✗ 构建产物不是最新的：\n  ' + stale.join('\n  '))
   console.error('  请运行：node tools/build-xiaoke.mjs')
 }
-if (hardFail) console.error('\n✗ 台词池校验失败（见上）')
+if (hardFail) console.error('\n✗ 台词池 / 功能补丁校验失败（见上）')
 if (colorFail) console.error('\n✗ 冷色残留校验失败（见上）')
 if (check) {
   if (!hardFail && !colorFail && !staleFail) console.log('\n✓ 构建产物是最新的，台词池与配色校验通过')
