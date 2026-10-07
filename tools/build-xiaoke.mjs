@@ -11,6 +11,8 @@
 //
 // 这两份产物**提交进仓库**（这样 link: 安装能直接用，且不要求用户跑构建），
 // 但永远不要手改 —— 手改会在下次构建时被覆盖。要改就改主题文件。
+// 新增功能（动态小克、余额预警换哭脸）不属于换皮，放在 skin/xiaoke-features.mjs，
+// 最后一步对产物逐字替换，每条都必须命中预期次数（第 6 步）。
 //
 // 用法：
 //   node tools/build-xiaoke.mjs            # 生成
@@ -25,6 +27,7 @@ import {
   TEXT_PROPS, FILL_PROPS,
   COPY_REWRITE, COPY_APPEND, LONG_LINE_THRESHOLD, LONG_LINE_SIZE, COPY_FORBIDDEN,
 } from '../skin/xiaoke-theme.mjs'
+import { HOST_PATCHES, WIDGET_PATCHES } from '../skin/xiaoke-features.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SRC_HOST = path.join(ROOT, 'upstream', 'lib', 'index.js')
@@ -268,6 +271,29 @@ function assertActivePool(widget, report) {
   if (missingAppend.length) report.poolMissingAppend = missingAppend
 }
 
+// —— 第 6 步：功能补丁 ——
+// skin/xiaoke-features.mjs 里的新增功能，在其余步骤之后对产物逐字替换。
+// 和 EXACT 不同：每条都必须命中 count 次（默认 1），否则记为失败、构建退出码非 0，
+// 上游改了相关代码时能立刻发现，而不是功能静默失效。
+function applyFeatures(text, patches, label, report) {
+  let out = text
+  // 补丁里统一写 \n；源码被 git（core.autocrlf）检出成 CRLF 时跟着换
+  const eol = text.includes('\r\n') ? '\r\n' : '\n'
+  for (const patch of patches) {
+    const { why, count = 1 } = patch
+    const from = patch.from.replace(/\n/g, eol)
+    const to = patch.to.replace(/\n/g, eol)
+    const hits = out.split(from).length - 1
+    if (hits !== count) {
+      (report.featureErrors ||= []).push(`${label}：「${why}」应命中 ${count} 次，实际 ${hits} 次`)
+      continue
+    }
+    out = out.split(from).join(to)
+  }
+  report.featuresApplied = (report.featuresApplied || 0) + patches.length
+  return out
+}
+
 function build() {
   const hostSrc = pickSource(SRC_HOST, [
     path.join(ROOT, 'lib', 'index.js'),
@@ -285,13 +311,16 @@ function build() {
     '// 要改配色/命名：改 skin/xiaoke-theme.mjs 后重新构建。\n' +
     '// ' + what + '\n'
 
-  const host = banner('宿主侧插件（小克版）', hostSrc) +
-    recolor(rename(fs.readFileSync(hostSrc, 'utf8')), report)
-  const widget = appendCopy(
-    rewriteCopy(
-      recolor(rename(fs.readFileSync(widgetSrc, 'utf8')), report),
+  const host = banner('宿主侧插件（小克版）', hostSrc) + applyFeatures(
+    recolor(rename(fs.readFileSync(hostSrc, 'utf8')), report),
+    HOST_PATCHES, '宿主', report)
+  const widget = applyFeatures(
+    appendCopy(
+      rewriteCopy(
+        recolor(rename(fs.readFileSync(widgetSrc, 'utf8')), report),
+        report),
       report),
-    report)
+    WIDGET_PATCHES, '挂件', report)
 
   assertActivePool(widget, report)
   return { host, widget, report, hostSrc, widgetSrc }
@@ -349,13 +378,19 @@ if (report.poolMissingAppend) {
   console.log('\n✗ 活跃池里缺少追加台词：')
   for (const x of report.poolMissingAppend) console.log('   ' + JSON.stringify(x))
 }
-const hardFail = report.poolError || report.poolLeaked || report.poolMissing || report.poolMissingAppend || report.poolResidual
+if (report.featureErrors) {
+  console.log('\n✗ 功能补丁没对上（上游可能改了相关代码，请更新 skin/xiaoke-features.mjs）：')
+  for (const x of report.featureErrors) console.log('   ' + x)
+} else if (report.featuresApplied) {
+  console.log('✓ 功能补丁 ' + report.featuresApplied + ' 条全部命中')
+}
+const hardFail = report.poolError || report.poolLeaked || report.poolMissing || report.poolMissingAppend || report.poolResidual || report.featureErrors
 const staleFail = stale.length > 0
 if (staleFail) {
   console.error('✗ 构建产物不是最新的：\n  ' + stale.join('\n  '))
   console.error('  请运行：node tools/build-xiaoke.mjs')
 }
-if (hardFail) console.error('\n✗ 台词池校验失败（见上）')
+if (hardFail) console.error('\n✗ 校验失败（见上）')
 if (check) {
   if (!hardFail && !staleFail) console.log('\n✓ 构建产物是最新的，台词池校验通过')
   process.exit(hardFail || staleFail ? 1 : 0)

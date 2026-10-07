@@ -11,6 +11,7 @@
 | `lib/xiaoke-index.js`、`lib/xiaoke-widget.js` | **MIT**（生成产物，见 [`LICENSE`](LICENSE)；原始版权归 MeteorNOX） |
 | `lib/accounting.mjs`、`skin/`、`tools/`、文档 | **MIT** |
 | `assets/xiaoke1.png`（本项目新增的角色图） | **不适用 MIT**：AI 工具生成，按 as-is 随插件分发，仅用于运行本插件；不授予再许可，也不声明为原创作品 |
+| `assets/xiaoke-anim-*.webp`、`assets/xiaoke-anim-cry-*.webp`（动态小克），以及 Releases 里的高清包 `xiaoke-anim-hd.zip` | **不适用 MIT**：基于 `xiaoke1.png` 制作的衍生素材（经本项目作者同意），按 as-is 随插件分发，仅用于运行本插件；不授予再许可，也不声明为原创作品 |
 | `assets/` 其余文件（音效 / 泡泡图） | 沿用上游说明，见 [`upstream/PROVENANCE.upstream.md`](upstream/PROVENANCE.upstream.md) |
 
 ## 二、本项目新增素材
@@ -18,6 +19,9 @@
 | 文件 | 来源 / 说明 |
 |---|---|
 | `xiaoke1.png`（610×610 RGBA） | **AI 工具生成**的 Claude 拟人角色图，经人工挑选、裁掉透明边、缩放为 610×610 以匹配上游的角色图规格（上游 `setupHitTest` 的命中画布是 610×610）。 |
+| `xiaoke-anim-{256,384}.webp`（动态 WebP，透明背景） | 「小克（动态）」用的日常动图，由 [AirsEDA](https://github.com/AirsEDA) 制作：以 `xiaoke1.png` 为底，用 AI 工具重绘睁眼 / 半闭 / 将闭 / 全闭四种眼睛状态，头发轻晃、身体呼吸由程序逐帧变形渲染（约 5.3 秒晃一个来回，16 秒正好 3 个来回，首尾接得上）。16 秒一圈，眨眼预排在第 1.2 秒和第 8.2 秒；眨眼那几帧 25 帧/秒，头发和呼吸 12.5 帧/秒，共 208 帧（浏览器会把动图每帧解码后留在内存里，帧数少一半占用就少一半）。第一帧选了轮廓最居中的姿势：挂件按第一帧算 clip-path 凸包，这样头发摆动时被裁掉的最少。 |
+| `xiaoke-anim-cry-{256,384}.webp` | 「小克（含余额预警）」余额告急时换上的大泪珠哭脸，制作方式同上（哭脸和哭脸的眼睛状态由 AI 工具重绘），泪珠随动作轻晃。 |
+| `xiaoke-anim-512.webp`、`xiaoke-anim-cry-512.webp`（高清包） | 同上两种表情的 512 档，不放在仓库里，打成 `xiaoke-anim-hd.zip`（`tools/pack-anim-hd.mjs`，条目不压缩）发在 [Releases](https://github.com/AirsEDA/dsh-xiaoke-widget/releases)；插件安装时按 `skin/xiaoke-features.mjs` 里的 SHA-256 核对。 |
 
 ### 元数据清理
 
@@ -26,6 +30,7 @@
 - `xiaoke1.png` 已剥离全部非必要块，只保留 `IHDR` / `IDAT` / `IEND`；
 - 生成工具写入的 **`caBX` 块（C2PA 内容来源追踪）** 确认已不存在；
 - 剥离是逐块重写，不触碰像素数据，因此画面完全不变。
+- 动态小克的 WebP（随插件 4 个、高清包 2 个）由原始像素直接编码，只含 `VP8X` / `ANIM` / `ANMF` 块，没有 `EXIF` / `XMP ` / `ICCP`。
 
 复核方式：
 
