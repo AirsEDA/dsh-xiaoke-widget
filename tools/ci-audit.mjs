@@ -318,7 +318,23 @@ run('3', '检查打包后是否可以运行', (problems, notes) => {
       const rel = String(f).replace(/^\.\//, '').replace(/\/$/, '')
       if (!rel) continue
       if (!has(rel)) { problems.push('files 白名单里的路径在磁盘上不存在：' + rel); continue }
-      if (!gitTracks(rel)) {
+      const abs = path.join(ROOT, rel)
+      if (fs.statSync(abs).isDirectory()) {
+        // v0.4.0b（用户追问"以后新增默认音效会不会也踩同样的坑"）：目录要**逐个文件**查。
+        //   只查目录本身是不够的 —— 只要目录里有**一个**文件被跟踪，`git ls-files assets` 就是成功的，
+        //   于是"新增了资源却忘了 git add"会被漏掉（git 安装缺文件、npm 安装正常，正是最阴的那种）。
+        const walkUntracked = (dir, pre) => {
+          for (const f of fs.readdirSync(dir)) {
+            const p2 = path.join(dir, f)
+            const r2 = pre + f
+            if (fs.statSync(p2).isDirectory()) walkUntracked(p2, r2 + '/')
+            else if (!gitTracks(r2)) {
+              problems.push('files 白名单目录里的 "' + r2 + '" **没有被 git 跟踪** —— npm/zip 安装没事，但 git 安装的用户会缺这个文件')
+            }
+          }
+        }
+        walkUntracked(abs, rel.replace(/\/$/, '') + '/')
+      } else if (!gitTracks(rel)) {
         problems.push('files 白名单里的 "' + rel + '" **没有被 git 跟踪** —— npm/zip 安装没事，但 git 安装的用户会缺这个文件（例如插件图标 icon.png 缺失会让 DSH 报 ENOENT）')
       }
     }
