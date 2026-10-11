@@ -14545,6 +14545,63 @@ function frameHitShapeMarkup(slot, paint, code, preset, base, cls, dx, dy, sc) {
     //    （fill-opacity="0" 在部分实现里会被当成"没有画" ⇒ 整块点不到，正是要避免的坑）
     var HITA = ' fill="#FFFFFF" fill-opacity="0.004" stroke="none"'
     var kind = cls || 'dshwv-bshape'
+    // v879（用户反馈"图片框上有区域点不到，像是还按旧形状判定"）：
+    //   命中形状以前**一律**按 svgCode / svgPreset 生成 —— 而图片槽位这两个字段通常是空的，
+    //   于是退回 classic：大泡泡变成"鲸鱼轮廓"、小泡泡变成椭圆 ⇒ 图片上落在旧形状之外的区域**点不到**。
+    //   现在：图片槽位的命中形状 = **覆盖这张图片矩形**的透明矩形（与 `<image>` 用同一套几何：
+    //   frameImageGeom 的 x/y/width/height ⇒ 所见即所得，点哪儿都算）。图片本身是 pointer-events:none，
+    //   这块矩形排在它后面（同层、更靠上），所以点击由它接管。
+    if (slot && slot.kind === 'image' && slot.imgId) {
+      try {
+        var gbox = base
+          ? { x: base.cx - base.rx, y: base.cy - base.ry, w: base.rx * 2, h: base.ry * 2 }
+          : FRAME_BOX
+        var attrs = frameImageGeom(gbox, dx || 0, dy || 0, sc || 1, slot)
+        var mx = / x="([^"]+)"/.exec(attrs)
+        var my = / y="([^"]+)"/.exec(attrs)
+        var mw = / width="([^"]+)"/.exec(attrs)
+        var mh = / height="([^"]+)"/.exec(attrs)
+        if (mx && my && mw && mh) {
+          var rx0 = Number(mx[1]), ry0 = Number(my[1]), rw0 = Number(mw[1]), rh0 = Number(mh[1])
+          // v880（用户拍板）：命中区 = 图片**不透明部分的包围盒** —— 可见处全可点、透明边距**照旧穿透**。
+          //   · 复用编辑器那套"按 imgId 量一次、缓存"的能力（frameEditOpaqueCache / frameEditOpaqueEnsure）；
+          //   · 还没量到 ⇒ 先用整张图矩形顶着（保证"点得到"），并**后台量一次**，量到后原地重画一次
+          //     把命中区收紧（不会反复重画：缓存与 pending 都有去重）；
+          //   · 量不到（全透明 / 读不出像素）⇒ 一直用整图矩形，绝不变成"整块点不到"。
+          var id0 = String(slot.imgId)
+          // ⚠️ 存在性守卫：这两样由编辑器那一段定义，而本文件常被离线探针"按片段切出来"单独 eval
+          //   （切片里没有它们时，裸引用会抛 ReferenceError，被外层 try 吞掉 ⇒ 整块命中形状消失）。
+          var ob = (typeof frameEditOpaqueCache !== 'undefined' && frameEditOpaqueCache) ? frameEditOpaqueCache[id0] : null
+          if (ob && isFinite(ob.ar) && ob.ar > 0 && rw0 > 0 && rh0 > 0) {
+            var dw = rw0
+            var dh = rh0
+            if (ob.ar > rw0 / rh0) dh = rw0 / ob.ar
+            else dw = rh0 * ob.ar
+            var ox0 = rx0 + (rw0 - dw) / 2
+            var oy0 = ry0 + (rh0 - dh) / 2
+            var hx = ox0 + dw * ob.fx
+            var hy = oy0 + dh * ob.fy
+            var hw = dw * ob.fw
+            var hh = dh * ob.fh
+            // 太小的命中区（近乎全透明）没有意义 ⇒ 退回整图矩形，避免"看起来点不到"
+            if (hw >= 8 && hh >= 8) {
+              return '<rect class="' + kind + '"' + HITA + ' x="' + frameNumStr(hx) + '" y="' + frameNumStr(hy) +
+                '" width="' + frameNumStr(hw) + '" height="' + frameNumStr(hh) + '"/>'
+            }
+          } else {
+            try {
+              if (typeof frameEditOpaqueEnsure === 'function') {
+                frameEditOpaqueEnsure(id0, function () {
+                  try { if (typeof frameReapplyCurrent === 'function') frameReapplyCurrent() } catch (err) {} // 量到后原地重画：命中区收紧、透明处恢复穿透
+                })
+              }
+            } catch (err) {}
+          }
+          return '<rect class="' + kind + '"' + HITA + ' x="' + mx[1] + '" y="' + my[1] +
+            '" width="' + mw[1] + '" height="' + mh[1] + '"/>'
+        }
+      } catch (err) {}
+    }
     if (!base) {
       // 大泡泡：代码优先，其次预设，最后经典
       if (code) return '<g class="' + kind + '"' + HITA + '>' + code + '</g>'
@@ -15363,21 +15420,24 @@ function frameEditSlotContentBox(kind) {
       var oy = r.y + (r.h - dh) / 2
       return { x: ox + dw * ob.fx, y: oy + dh * ob.fy, w: dw * ob.fw, h: dh * ob.fh }
     }
+    // v878：形状类（SVG）一律用**画布坐标下的真实包围盒** —— 它已经包含 scale 与 dx/dy，
+    //   所以这里**不再**乘 scale、也**不再**加位移（旧实现在椭圆模式下重复施加 ⇒ 框比泡泡走得远）。
+    var onCanvas = frameEditShapeBoxOnCanvas(kind)
+    if (onCanvas && onCanvas.w > 0 && onCanvas.h > 0) return onCanvas
+    // 量不到（元素还没渲染 / getBBox 不可用）⇒ 退回按**标称小框** + scale + 位移估算
     var box = frameSlotBox(frameEditDraft, kind)
     if (!box) return null
     var s = (isFinite(sl.scale) && Number(sl.scale) > 0) ? Number(sl.scale) : 1
     var dx = Number(sl.dx) || 0
     var dy = Number(sl.dy) || 0
     var C = { x: box.x + box.w / 2, y: box.y + box.h / 2 }
-    var gb = frameEditSvgContentBox(kind)
-    if (gb && gb.w > 0 && gb.h > 0) {
-      var w = gb.w * s
-      var h = gb.h * s
-      var c0 = { x: gb.x + gb.w / 2, y: gb.y + gb.h / 2 }
-      var c1 = { x: C.x + (c0.x - C.x) * s + dx, y: C.y + (c0.y - C.y) * s + dy }
-      return { x: c1.x - w / 2, y: c1.y - h / 2, w: w, h: h }
-    }
-    return { x: C.x - box.w * s / 2 + dx, y: C.y - box.h * s / 2 + dy, w: box.w * s, h: box.h * s }
+    var nw = kind === 'big'
+      ? { w: FRAME_BOX.w, h: FRAME_BOX.h }
+      : (function () {
+        var base = FRAME_CLASSIC_SMALL[kind === 'small2' ? 1 : 0]
+        return base ? { w: base.rx * 2, h: base.ry * 2 } : { w: FRAME_BOX.w, h: FRAME_BOX.h }
+      })()
+    return { x: C.x - nw.w * s / 2 + dx, y: C.y - nw.h * s / 2 + dy, w: nw.w * s, h: nw.h * s }
   } catch (err) { return null }
 }
 // v842：以**内容包围盒的中心**为基准缩放 —— 缩放前后把这个中心钉住（只补 dx/dy）。
@@ -15563,6 +15623,46 @@ function frameEditSvgContentBox(kind) {
     var b = el.getBBox()
     if (!b || !b.width || !b.height) return null
     return { x: b.x, y: b.y, w: b.width, h: b.height }
+  } catch (err) { return null }
+}
+// v878（用户报"拖动小气泡时虚线框比小泡泡走得远"）：虚线框必须画在**画布坐标下的真实包围盒**上。
+//   三种模式在 getBBox() 上的语义并不一致：
+//     · classic 椭圆：cx/cy/rx/ry 已经把 scale 与 dx/dy **烘焙进属性**了 ⇒ getBBox() 就是画布坐标；
+//     · 自定义代码 / 预设：形状在 <g>/<path> 的 transform 里 ⇒ getBBox() **不含**自身 transform。
+//   以前 frameEditSlotContentBox() 对三者**一律**再乘一次 scale、再加一次 dx/dy ⇒
+//   椭圆模式下位移被算成 dx*(1+s) 倍（s=0.5 就是 1.5 倍），看起来就是"框比泡泡走得远"。
+//   这里统一：getBBox() + 元素自身 transform 矩阵 = 画布坐标（与预览所见一致）。
+//   （渲染器只用 translate/scale，没有旋转 ⇒ 变换四角求外接矩形是精确的。）
+function frameEditShapeBoxOnCanvas(kind) {
+  try {
+    var svg = frameEditShapeBox ? frameEditShapeBox.querySelector('svg') : null
+    if (!svg) return null
+    var cls = kind === 'small1' ? '.dshwv-b1' : (kind === 'small2' ? '.dshwv-b2' : '.dshwv-bshape')
+    var el = svg.querySelector(cls)
+    if (!el || !el.getBBox) return null
+    var b
+    try { b = el.getBBox() } catch (err) { return null }
+    if (!b || !b.width || !b.height) return null
+    var local = { x: b.x, y: b.y, w: b.width, h: b.height }
+    var m = null
+    try {
+      var c = el.transform && el.transform.baseVal ? el.transform.baseVal.consolidate() : null
+      if (c && c.matrix) m = c.matrix
+    } catch (err) {}
+    if (!m) return local
+    var ident = (m.a === 1 && m.b === 0 && m.c === 0 && m.d === 1 && m.e === 0 && m.f === 0)
+    if (ident) return local
+    var xs = [], ys = []
+    var pts = [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]]
+    for (var i = 0; i < pts.length; i++) {
+      var X = m.a * pts[i][0] + m.c * pts[i][1] + m.e
+      var Y = m.b * pts[i][0] + m.d * pts[i][1] + m.f
+      if (!isFinite(X) || !isFinite(Y)) return local
+      xs.push(X); ys.push(Y)
+    }
+    var minx = Math.min.apply(null, xs), maxx = Math.max.apply(null, xs)
+    var miny = Math.min.apply(null, ys), maxy = Math.max.apply(null, ys)
+    return { x: minx, y: miny, w: maxx - minx, h: maxy - miny }
   } catch (err) { return null }
 }
 // 把一个槽位的"内容中心"对到默认大泡泡的中心上（只改 dx/dy）
