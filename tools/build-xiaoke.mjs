@@ -22,7 +22,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   RENAMES, HEX_TEXT, HEX_FILL, HEX_FILL_OVERRIDE, RGBA_MAP, EXACT,
-  TEXT_PROPS, FILL_PROPS,
+  TEXT_PROPS, FILL_PROPS, COLOR_EXEMPT,
   COPY_REWRITE, COPY_APPEND, LONG_LINE_THRESHOLD, LONG_LINE_SIZE, COPY_FORBIDDEN,
 } from '../skin/xiaoke-theme.mjs'
 
@@ -141,6 +141,25 @@ function recolor(text, report) {
     if (n) leftovers.set(key, n)
   }
   if (leftovers.size) report.leftovers = leftovers
+
+  // ⑤ 冷色残留扫描 —— 补上 ④ 的**结构性盲区**。
+  // ④ 只遍历「已经在主题表里的键」，所以从未进过表的颜色永远不会被报告：
+  //   v0.4.0 的泡泡框编辑器带进 #3a56a8 / #7d8db8 两条靛蓝，构建**完全静默**，
+  //   是我看截图时肉眼发现的。这套皮肤是暖色系，残留的冷色一定是漏改。
+  // 判据：蓝通道同时显著高于红与绿（单纯 b>r 会把绿色也误判）。
+  // 例外：USER_CONTENT_COLORS 是「跑马灯方案/图表调色板」等**用户可选内容**，
+  //   本来就该是原色（例如紫罗兰 #6a6ad0），不参与皮肤换色。
+  const cold = new Map()
+  for (const m of text.matchAll(/#[0-9a-fA-F]{6}\b/g)) {
+    const hex = m[0].toLowerCase()
+    if (COLOR_EXEMPT.test(hex)) continue
+    const r = parseInt(hex.slice(1, 3), 16)
+    const g = parseInt(hex.slice(3, 5), 16)
+    const b = parseInt(hex.slice(5, 7), 16)
+    if (b > r + 20 && b > g + 10) cold.set(hex, (cold.get(hex) || 0) + 1)
+  }
+  if (cold.size) report.coldLeftovers = cold
+
   if (unmapped.size) report.unmapped = unmapped
   return text
 }
@@ -326,6 +345,13 @@ if (report.leftovers) {
     console.log(`   ${c}  ×${n}`)
   }
 }
+if (report.coldLeftovers) {
+  console.log('\n✗ 产物里仍有冷色（这套皮肤是暖色系，冷色一定是漏改）：')
+  for (const [c, n] of [...report.coldLeftovers].sort((a, b) => b[1] - a[1])) {
+    console.log(`   ${c}  ×${n}`)
+  }
+  console.log('   要保留就在 skin/xiaoke-theme.mjs 的 COLOR_EXEMPT 里列出（用户可选内容才该保留）。')
+}
 if (report.copyMissed && report.copyMissed.length) {
   console.log('\n⚠️ 以下台词在源码里没找到（上游可能改过措辞，请更新主题表）：')
   for (const m of report.copyMissed) console.log('   ' + JSON.stringify(m))
@@ -350,17 +376,21 @@ if (report.poolMissingAppend) {
   for (const x of report.poolMissingAppend) console.log('   ' + JSON.stringify(x))
 }
 const hardFail = report.poolError || report.poolLeaked || report.poolMissing || report.poolMissingAppend || report.poolResidual
+// 冷色残留也算硬失败：这套皮肤是暖色系，漏改的冷色在界面上一眼可见
+// （v0.4.0 的 #3a56a8 / #7d8db8 就是这么漏过去的 —— 当时构建完全静默）。
+const colorFail = !!report.coldLeftovers
 const staleFail = stale.length > 0
 if (staleFail) {
   console.error('✗ 构建产物不是最新的：\n  ' + stale.join('\n  '))
   console.error('  请运行：node tools/build-xiaoke.mjs')
 }
 if (hardFail) console.error('\n✗ 台词池校验失败（见上）')
+if (colorFail) console.error('\n✗ 冷色残留校验失败（见上）')
 if (check) {
-  if (!hardFail && !staleFail) console.log('\n✓ 构建产物是最新的，台词池校验通过')
-  process.exit(hardFail || staleFail ? 1 : 0)
+  if (!hardFail && !colorFail && !staleFail) console.log('\n✓ 构建产物是最新的，台词池与配色校验通过')
+  process.exit(hardFail || colorFail || staleFail ? 1 : 0)
 }
-if (hardFail) process.exitCode = 1
+if (hardFail || colorFail) process.exitCode = 1
 
 if (report.appendSkipped) console.log('\n⚠️ 追加台词跳过：' + report.appendSkipped)
 if (report.unmapped) {

@@ -81,6 +81,13 @@ export const HEX_TEXT = {
   '#b33333': '#a03a3a',
   '#8a1f1f': '#8a3a2a', // toast 底（白字，故深色）
   '#2f7a42': '#4a9e63',
+  // v0.4.0「自定义泡泡框」编辑器新增的说明文字色（.dshwv-fenote）。
+  // 与 #9fb0d9 同为「次要文字」语义 ⇒ 用同一档暖灰。
+  '#7d8db8': '#a09d96',
+  // `.dshwv-fadd{… color:#3a56a8 }` —— 泡泡框编辑器里的**可点操作**标签
+  // （cursor:pointer + 粗体 + hover 底色）。按本表既有约定，链接/操作文字用浅一档珊瑚
+  // （同 `#2f4488` → `#c26847`），不用正文的暖近黑。
+  '#3a56a8': '#c26847',
 }
 
 export const HEX_FILL = {
@@ -116,6 +123,9 @@ export const HEX_FILL = {
 // 其中「靛蓝夜曲 indigo」本来就该是靛蓝，属于用户内容，不是界面皮肤。
 export const RGBA_MAP = {
   '32,49,112': '95,75,60', // 靛蓝透明度阶梯（边框/hover/填充）→ 暖棕
+  // v0.4.0「自定义泡泡框」编辑器选中框的半透明填充（rgba(58,86,168,.10)）——
+  // 与上面 #3a56a8 描边成套，属于同一条上游靛蓝，不映射就会在暖色主题里透出蓝色。
+  '58,86,168': '217,119,87', // → 珊瑚橙
   '255,255,255': '250,249,245', // 白透明度（面板/文字阴影）→ 米白
   '15,23,42': '20,20,19', // 遮罩 → Claude 暖黑
   '201,57,43': '198,69,69', // 删除红
@@ -157,6 +167,11 @@ export const EXACT = [
   // 宿主侧同一条默认值的兜底：`frameColorOk(paint.line, '#203170')` —— 属性名认成
   // frameColorOk（非已知语义），通用分流取不到，同样会留成靛蓝。
   ["frameColorOk(paint.line, '#203170')", "frameColorOk(paint.line, '" + LOOK.bubbleStroke + "')"],
+  // —— v0.4.0「自定义泡泡框」编辑器的**选中框 / 八个把手 / 悬停轮廓** ——
+  // 这是上游另一条独立的靛蓝（#3a56a8，不是主色 #203170），用在 `setAttribute('stroke', …)`
+  // 这种写法里：回看找不到 `属性:` 或 `属性=`，通用分流判不出语义 ⇒ 原样留成靛蓝。
+  // 语义 = 编辑器选中态 ⇒ 用珊瑚橙，与主色一致。
+  ["setAttribute('stroke', '#3a56a8')", "setAttribute('stroke', '" + LOOK.bubbleStroke + "')"],
 
   // —— 默认泡泡的「余额数值」：清掉跑马灯渐变，改用纯色 ——
   // ① BUBBLE_DEFAULT_ITEMS（出厂默认泡泡，JSON 形态、带对齐空格）
@@ -224,6 +239,14 @@ export const KEYED_FILL_PROPS = ['bg', 'peakBg', 'offBg', 'background', 'backgro
 
 // 「恢复默认」的默认泡泡底色
 export const MODULE_BG_DEFAULT = '#f5f0e8'
+
+// —— 冷色残留扫描的豁免名单（build 的 ⑤ 项用）——
+// 这些颜色**本来就该是原色**，是「用户可选内容」而非界面皮肤：
+//   · USAGE_PALETTE 的后 9 色 —— 图表序列调色板，用户没得选但改了会打乱配色意图；
+//     （首色已被 EXACT 单独改成主色，见上面）
+//   · 跑马灯 15 套方案的 rgb() 三元组 —— 走 RGBA_MAP/EXACT 之外，本来就不参与换色。
+// 判据只看冷色，所以这里只需列出「偏蓝但合法」的。
+export const COLOR_EXEMPT = /^#(b060c8|3aa6c8|6a6ad0|c84a8a|d06a8a)$/
 
 // 判定一个 CSS 声明属性属于「文字色」还是「填充色」。
 export const TEXT_PROPS = new Set([
