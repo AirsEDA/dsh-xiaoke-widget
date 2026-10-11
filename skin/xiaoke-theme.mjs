@@ -148,6 +148,16 @@ export const EXACT = [
   // 描边粗细：气泡主体 + 两个尾巴，三处一起加粗
   ['stroke-width="18"', 'stroke-width="' + LOOK.bubbleStrokeWidth + '"'],
 
+  // —— v0.4.0「自定义泡泡框」新增的描边默认色 ——
+  // `framePaintDefaults()` 与描边取色器都硬编码 `'#203170'`，属性名是 `line`
+  // （不是 CSS 的 stroke/border），通用属性分流认不出来，会原样留成靛蓝。
+  // 语义 = 气泡框描边 ⇒ 跟 stroke 一样用珊瑚橙。
+  ["lineOn: true, line: '#203170'", "lineOn: true, line: '" + LOOK.bubbleStroke + "'"],
+  ["frameEditColor(lnRow, 'line', '#203170')", "frameEditColor(lnRow, 'line', '" + LOOK.bubbleStroke + "')"],
+  // 宿主侧同一条默认值的兜底：`frameColorOk(paint.line, '#203170')` —— 属性名认成
+  // frameColorOk（非已知语义），通用分流取不到，同样会留成靛蓝。
+  ["frameColorOk(paint.line, '#203170')", "frameColorOk(paint.line, '" + LOOK.bubbleStroke + "')"],
+
   // —— 默认泡泡的「余额数值」：清掉跑马灯渐变，改用纯色 ——
   // ① BUBBLE_DEFAULT_ITEMS（出厂默认泡泡，JSON 形态、带对齐空格）
   ['"type":  "balance",\n                            "size":  20,\n                            "rgb":  "indigo",\n                            "color":  "",',
