@@ -325,9 +325,10 @@ function build() {
   ])
 
   const report = {}
+  // 路径一律用正斜杠：Windows 上 path.relative 给的是反斜杠，产物会和 Linux 上构建的不一样
   const banner = (what, from) =>
     '// ⚠️ 本文件由 tools/build-xiaoke.mjs 生成，请勿手改。\n' +
-    '// 上游源：' + path.relative(ROOT, from) + '\n' +
+    '// 上游源：' + path.relative(ROOT, from).split(path.sep).join('/') + '\n' +
     '// 要改配色/命名：改 skin/xiaoke-theme.mjs 后重新构建。\n' +
     '// ' + what + '\n'
 
