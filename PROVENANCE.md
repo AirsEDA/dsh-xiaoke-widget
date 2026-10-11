@@ -24,7 +24,7 @@
 | `icon.png`（256×256 RGBA） | 由上面那张裁切合成：256×256 圆角方块 + 珊瑚描边。规格对齐上游 `icon.png`（同为 256×256 RGBA 圆角方块），生成方式见 `tools/gen-icon.py`。 |
 | `xiaoke-anim-{256,384}.webp`（动态 WebP，透明背景） | 「小克（动态）」用的日常动图，由 [AirsEDA](https://github.com/AirsEDA) 制作：以 `xiaoke1.png` 为底，用 AI 工具重绘睁眼 / 半闭 / 将闭 / 全闭四种眼睛状态，头发轻晃、身体呼吸由程序逐帧变形渲染（约 5.3 秒晃一个来回，16 秒正好 3 个来回，首尾接得上）。16 秒一圈，眨眼预排在第 1.2 秒和第 8.2 秒；眨眼那几帧 25 帧/秒，头发和呼吸 12.5 帧/秒，共 208 帧（浏览器会把动图每帧解码后留在内存里，帧数少一半占用就少一半）。第一帧选了轮廓最居中的姿势：挂件按第一帧算 clip-path 凸包，这样头发摆动时被裁掉的最少。 |
 | `xiaoke-anim-cry-{256,384}.webp` | 「小克（含余额预警）」余额告急时换上的大泪珠哭脸，制作方式同上（哭脸和哭脸的眼睛状态由 AI 工具重绘），泪珠随动作轻晃。 |
-| `xiaoke-anim-512.webp`、`xiaoke-anim-cry-512.webp`（高清包） | 同上两种表情的 512 档，不放在仓库里，打成 `xiaoke-anim-hd.zip`（`tools/pack-anim-hd.mjs`，条目不压缩）发在 [Releases](https://github.com/AirsEDA/dsh-xiaoke-widget/releases)；插件安装时按 `skin/xiaoke-features.mjs` 里的 SHA-256 核对。 |
+| `xiaoke-anim-512.webp`、`xiaoke-anim-cry-512.webp`（高清包） | 同上两种表情的 512 档，不放在仓库里，打成 `xiaoke-anim-hd.zip`（`tools/pack-anim-hd.mjs`，条目不压缩）发在 [AirsEDA 的 Releases](https://github.com/AirsEDA/dsh-xiaoke-widget/releases)，本仓库的 Releases 里也放一份（同一个文件，挂件里两个下载地址都有）；插件安装时按 `skin/xiaoke-features.mjs` 里的 SHA-256 核对。 |
 
 ### 元数据清理
 

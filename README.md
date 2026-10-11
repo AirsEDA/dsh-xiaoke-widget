@@ -38,7 +38,7 @@ DSH Web 界面右下角的一只桌宠。点她会冒出各种 Claude 味的碎�
 
 直接沿用「余额预警」的开关和阈值，不用另外设置。想马上看看哭脸：把预警线临时调得比当前余额高就行。
 动图按挂件在屏幕上的实际大小自动挑档。插件自带 256 / 384 两档；想把挂件调得很大又不想糊，可以在「资源管理 → 动态小克 · 高清档」里
-下载 512 高清包（约 18 MB，在 [Releases](https://github.com/AirsEDA/dsh-xiaoke-widget/releases)），再点「安装…」选中下载的 zip，装好占硬盘约 18 MB。
+下载 512 高清包（约 18 MB，在 [AirsEDA 的 Releases](https://github.com/AirsEDA/dsh-xiaoke-widget/releases)，[本仓库的 Releases](https://github.com/aklnaaw/dsh-xiaoke-widget/releases) 里也有一份），再点「安装…」选中下载的 zip，装好占硬盘约 18 MB。
 
 浏览器会把动图的每一帧解码后留在内存和显存里，各档比静态小克多占（作者电脑上的 Edge 实测，因电脑而异）：
 

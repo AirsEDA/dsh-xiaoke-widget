@@ -17,8 +17,12 @@
 // 放在 GitHub Releases，用户下载后在「资源管理 → 动态小克 · 高清档」里选文件安装，装了以后挂件调大才用。
 // ============================================================================
 
-// 高清包：下载地址，和包里两个文件的 SHA-256（tools/pack-anim-hd.mjs 打包时会打印）。只装核对得上的文件。
-const HD_URL = 'https://github.com/AirsEDA/dsh-xiaoke-widget/releases/download/xiaoke-anim-hd-v1/xiaoke-anim-hd.zip'
+// 高清包：两个下载地址（动图作者的 fork 和本仓库各发一份 Release，传的是同一个 zip，一个不能用了还有另一个），
+// 和包里两个文件的 SHA-256（tools/pack-anim-hd.mjs 打包时会打印）。只装核对得上的文件。
+const HD_URLS = [
+  'https://github.com/AirsEDA/dsh-xiaoke-widget/releases/download/xiaoke-anim-hd-v1/xiaoke-anim-hd.zip',
+  'https://github.com/aklnaaw/dsh-xiaoke-widget/releases/download/xiaoke-anim-hd-v1/xiaoke-anim-hd.zip',
+]
 const HD_FILES = {
   'xiaoke-anim-512.webp': 'ac1e52cc2fe0c0b5fd89b42b80b18ce0e7b51910d5ea8d3b77e15ce321afdfeb',
   'xiaoke-anim-cry-512.webp': '5a6844667d246fa804c2bb291049989a5e4c87ab0de30d8a0475a708270850a1',
@@ -84,7 +88,7 @@ function xkReapplyMood() {
   xkSetCrying(xkLowBalance)
 }
 // —— 512 高清档（可选）：「资源管理 → 动态小克 · 高清档」里下载高清包、选文件安装 / 卸载 ——
-var XK_HD_URL = '${HD_URL}'
+var XK_HD_URLS = ${JSON.stringify(HD_URLS)}
 var xkHdInstalled = false
 var xkHdMsg = ''
 function xkHdSet(on) {
@@ -115,7 +119,7 @@ function xkHdSection(wrap) {
   var lines = xkHdInstalled
     ? ['已安装，占硬盘约 18 MB。挂件在屏幕上超过 384 物理像素时改用 512 档，不需要了可以卸载（卸载后最大用 384 档）。'].concat(XK_HD_USAGE)
     : ['插件自带 256 / 384 两档，默认大小够用。想把挂件调得很大又不想糊，可以另装 512 高清档：下载约 18 MB，装好占硬盘约 18 MB，只在挂件超过 384 物理像素时才用。']
-      .concat(XK_HD_USAGE, ['先下载高清包，再点「安装…」选中下载的 zip。'])
+      .concat(XK_HD_USAGE, ['先下载高清包（下载不了就点「备用下载」，是同一个文件），再点「安装…」选中下载的 zip。'])
   if (xkHdMsg) lines.unshift(xkHdMsg)
   tip.textContent = lines.join('\\n')
   ent.body.appendChild(tip)
@@ -124,14 +128,16 @@ function xkHdSection(wrap) {
   if (xkHdInstalled) {
     row.appendChild(resMkDel('卸载', false, xkHdRemove))
   } else {
-    var dl = document.createElement('a')
-    dl.className = 'dshxkv-resimp'
-    dl.href = XK_HD_URL
-    dl.target = '_blank'
-    dl.rel = 'noopener noreferrer'
-    dl.style.textDecoration = 'none'
-    dl.textContent = '下载高清包'
-    row.appendChild(dl)
+    XK_HD_URLS.forEach(function (url, i) {
+      var dl = document.createElement('a')
+      dl.className = 'dshxkv-resimp'
+      dl.href = url
+      dl.target = '_blank'
+      dl.rel = 'noopener noreferrer'
+      dl.style.textDecoration = 'none'
+      dl.textContent = i === 0 ? '下载高清包' : '备用下载'
+      row.appendChild(dl)
+    })
     row.appendChild(resMkBtn('dshxkv-resimp', '安装…', false, xkHdPick))
   }
   ent.body.appendChild(row)
