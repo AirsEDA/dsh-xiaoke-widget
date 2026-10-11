@@ -1,5 +1,7 @@
 # 小克桌宠
 
+> 这是 [aklnaaw/dsh-xiaoke-widget](https://github.com/aklnaaw/dsh-xiaoke-widget) 的 fork，只比原版多了[状态记号](#状态记号)。下文里的「我」指原作者 aklnaaw。
+
 DSH Web 界面右下角的一只桌宠。点她会冒出各种 Claude 味的碎碎念。
 
 这是二创：原项目是 [MeteorNOX/DeepSeek-Balance-Whale-Widget](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget) 的小鲸鱼挂件，
