@@ -11,9 +11,11 @@
   ],
   "type": "module",
   "main": "lib/index.js",
+  "icon": "./icon.png",
   "files": [
     "lib",
     "assets",
+    "icon.png",
     "cordis.patch.yml",
     "README.md",
     "PROVENANCE.md"

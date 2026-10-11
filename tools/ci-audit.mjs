@@ -338,7 +338,14 @@ run('3', '检查打包后是否可以运行', (problems, notes) => {
     if (!tgz) throw new Error('npm pack 没有产出 .tgz（目录内容：' + fs.readdirSync(packDir).join(',') + '）')
     tarball = path.join(packDir, tgz)
     const inPack = new Set(
-      execFileSync('tar', ['-tzf', tarball], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+      // ⚠️ 不要给选项、也不要用绝对路径 —— 本机同时存在两种 tar，各自的坑正好相反：
+      //    · Windows 自带 `C:\Windows\System32\tar.exe` 是 **bsdtar**，**不认** GNU 专有的 `--force-local`
+      //      （"Option --force-local is not supported"）⇒ v818/v819 加的 `--force-local` 让它永远红；
+      //    · Git for Windows 的 **GNU tar** 遇到带盘符的绝对路径（C:\…）会当成"远程主机"
+      //      （"Cannot connect to C: resolve failed"）。
+      //    ⇒ 通用写法：把 cwd 切到 tarball 所在目录、只传裸文件名。两种实现都成立，且不再挑 PATH 顺序。
+      execFileSync('tar', ['-tzf', path.basename(tarball)],
+        { cwd: path.dirname(tarball), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
         .split('\n').map((s) => s.trim().replace(/^package\//, '')).filter(Boolean),
     )
     const pkgSizeKb = Math.round(fs.statSync(tarball).size / 1024)
